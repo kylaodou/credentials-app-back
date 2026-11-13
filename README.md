@@ -1,59 +1,99 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Credential App — API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+API d'un coffre-fort personnel d'identifiants : chaque utilisateur y range ses comptes, mots de
+passe, jetons d'accès et liens, chiffrés en base, et ne peut les afficher en clair qu'après avoir
+confirmé son mot de passe.
 
-## About Laravel
+L'interface web associée se trouve dans le dépôt [`credentials-app`](https://github.com/kylaodou/credentials-app).
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Fonctionnalités
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- **Connexion avec Google** (OAuth 2) : redirection, retour et création automatique du compte.
+- **Mot de passe applicatif** : défini après la première connexion Google, puis demandé pour
+  confirmer les actions sensibles (`auth/set-password`, `auth/verify-password`).
+- **Mot de passe oublié** par code à usage unique (OTP) envoyé par e-mail : envoi, vérification,
+  réinitialisation.
+- **Identifiants** (CRUD complet) : nom, type, identifiant, mot de passe, jeton, URL, description,
+  date de validité.
+- **Chiffrement** : l'identifiant, le mot de passe et le jeton sont chiffrés avec la clé de
+  l'application (`APP_KEY`) et masqués dans les réponses ; ils ne sont renvoyés en clair que par
+  la route `GET /api/credentials/{id}/reveal`.
+- **E-mails** de bienvenue et d'envoi du code OTP.
+- Authentification de l'API par jetons Sanctum.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Stack technique
 
-## Learning Laravel
+- PHP 8.2+, Laravel 12
+- PostgreSQL
+- Laravel Sanctum
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## Routes
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/api/auth/google/redirect` | Redirige vers Google |
+| GET | `/api/auth/google/callback` | Retour de Google, crée la session |
+| POST | `/api/auth/forgot-password/send-otp` | Envoie un code par e-mail |
+| POST | `/api/auth/forgot-password/verify-otp` | Vérifie le code |
+| POST | `/api/auth/forgot-password/reset` | Définit un nouveau mot de passe |
+| GET | `/api/me` | Utilisateur connecté |
+| POST | `/api/logout` | Déconnexion |
+| POST | `/api/auth/set-password` | Définit le mot de passe applicatif |
+| POST | `/api/auth/verify-password` | Vérifie le mot de passe applicatif |
+| GET, POST, PUT, DELETE | `/api/credentials` | Gestion des identifiants |
+| GET | `/api/credentials/{id}/reveal` | Affiche un identifiant en clair |
 
-## Laravel Sponsors
+## Prérequis
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+- PHP 8.2+, Composer 2
+- PostgreSQL 14+
+- Un projet Google Cloud avec un identifiant client OAuth 2.0
 
-### Premium Partners
+## Installation
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+```bash
+git clone https://github.com/kylaodou/credentials-app-back.git
+cd credentials-app-back
 
-## Contributing
+composer install
+cp .env.example .env
+php artisan key:generate
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Renseignez dans `.env` :
 
-## Code of Conduct
+```env
+DB_CONNECTION=pgsql
+DB_DATABASE=credential-app
+DB_USERNAME=postgres
+DB_PASSWORD=votre_mot_de_passe
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+FRONTEND_URL=http://localhost:4200
 
-## Security Vulnerabilities
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Configurez aussi `MAIL_*` pour l'envoi réel des e-mails (par défaut, `MAIL_MAILER=log` les écrit
+dans `storage/logs/laravel.log`).
 
-## License
+```bash
+php artisan migrate
+php artisan serve
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+L'API est disponible sur http://localhost:8000.
+
+> Ne changez jamais `APP_KEY` sur une base existante : les identifiants déjà chiffrés ne pourraient
+> plus être déchiffrés.
+
+## Tests
+
+```bash
+php artisan test
+```
+
+## Auteur
+
+[@kylaodou](https://github.com/kylaodou)
