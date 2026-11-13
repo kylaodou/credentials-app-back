@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Credential;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class CredentialController extends Controller
 {
@@ -40,6 +41,12 @@ class CredentialController extends Controller
     public function reveal(Request $request, Credential $credential)
     {
         $this->authorize($request->user(), $credential);
+
+        // Les secrets ne sont renvoyés qu'après confirmation récente du mot de passe applicatif.
+        if (!Cache::has(AuthController::verifiedKey($request))) {
+            return response()->json(['message' => 'Password confirmation required'], 423);
+        }
+
         return response()->json([
             'username' => $credential->username,
             'password' => $credential->password,
@@ -76,6 +83,6 @@ class CredentialController extends Controller
 
     private function authorize(mixed $user, Credential $credential): void
     {
-        abort_if($credential->user_id !== $user->id, 403);
+        abort_if((string) $credential->user_id !== (string) $user->id, 403);
     }
 }

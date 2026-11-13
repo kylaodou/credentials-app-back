@@ -12,9 +12,11 @@ class OtpCode extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
-    protected $fillable = ['email', 'code', 'type', 'expires_at'];
+    protected $fillable = ['email', 'code', 'type', 'attempts', 'expires_at'];
 
-    protected $casts = ['expires_at' => 'datetime'];
+    protected $hidden = ['code'];
+
+    protected $casts = ['expires_at' => 'datetime', 'attempts' => 'integer'];
 
     public function isExpired(): bool
     {
