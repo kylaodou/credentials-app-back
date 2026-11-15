@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Support\Tokens;
+
 use App\Models\PersonalAccessToken;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -16,6 +18,16 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
+
+        // Déconnexion automatique : un jeton web inutilisé depuis 30 minutes est refusé puis supprimé.
+        Sanctum::authenticateAccessTokensUsing(function ($token, bool $isValid) {
+            if ($isValid && Tokens::isIdle($token)) {
+                $token->delete();
+                return false;
+            }
+
+            return $isValid;
+        });
 
         $this->configureRateLimiting();
     }
@@ -43,5 +55,8 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('app-password', fn (Request $request) => Limit::perMinute(5)->by($by($request)));
 
         RateLimiter::for('reveal', fn (Request $request) => Limit::perMinute(30)->by($by($request)));
+
+        // Codes de connexion de l'extension : peu d'essais, par adresse IP.
+        RateLimiter::for('extension-connect', fn (Request $request) => Limit::perMinutes(10, 10)->by($request->ip()));
     }
 }

@@ -7,6 +7,7 @@ use App\Mail\OtpMail;
 use App\Mail\WelcomeMail;
 use App\Models\OtpCode;
 use App\Models\User;
+use App\Support\Tokens;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
@@ -16,8 +17,11 @@ use Laravel\Socialite\Facades\Socialite;
 
 class AuthController extends Controller
 {
-    /** Durée de validité de la confirmation du mot de passe applicatif. */
+    /** Durée de validité de la confirmation du mot de passe applicatif (application web). */
     public const CONFIRMATION_MINUTES = 5;
+
+    /** Durée pendant laquelle l'extension reste déverrouillée après la saisie du mot de passe. */
+    public const EXTENSION_UNLOCK_MINUTES = 15;
 
     /** Nombre d'essais autorisés pour un même code OTP. */
     private const MAX_OTP_ATTEMPTS = 5;
@@ -55,7 +59,8 @@ class AuthController extends Controller
             $user->update(['google_id' => $googleUser->getId(), 'avatar' => $googleUser->getAvatar()]);
         }
 
-        $token = $user->createToken('api-token')->plainTextToken;
+        // Jeton limité : il ne donne accès aux identifiants qu'après la saisie du mot de passe applicatif.
+        $token = Tokens::pending($user);
         $needsPassword = !$user->app_password ? 'true' : 'false';
 
         // Le jeton est transmis dans le fragment (#) : il n'est jamais envoyé à un serveur,
@@ -86,7 +91,7 @@ class AuthController extends Controller
 
         $user->update(['app_password' => Hash::make($request->password)]);
 
-        return response()->json(['message' => 'Password set successfully']);
+        return response()->json(['message' => 'Password set successfully'] + $this->unlock($request));
     }
 
     // Verify app password (mini-session for sensitive data)
@@ -99,11 +104,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid password'], 401);
         }
 
-        // Ouvre une courte session de confirmation, liée au jeton courant,
-        // exigée par le serveur pour afficher les secrets en clair.
-        Cache::put(self::verifiedKey($request), true, now()->addMinutes(self::CONFIRMATION_MINUTES));
-
-        return response()->json(['verified' => true, 'expires_in' => self::CONFIRMATION_MINUTES * 60]);
+        return response()->json(['verified' => true] + $this->unlock($request));
     }
 
     // Send OTP for forgot password
@@ -180,7 +181,38 @@ class AuthController extends Controller
         $user = User::where('email', $email)->firstOrFail();
         $user->update(['app_password' => Hash::make($request->password)]);
 
+        // Nouveau mot de passe : toutes les sessions ouvertes (web et extension) sont fermées.
+        $user->tokens()->delete();
+
         return response()->json(['message' => 'Password reset successfully']);
+    }
+
+    /**
+     * Après la saisie du mot de passe applicatif :
+     * - un jeton « pending » est remplacé par un vrai jeton de session (renvoyé au client) ;
+     * - une courte fenêtre est ouverte pour afficher les secrets en clair.
+     */
+    private function unlock(Request $request): array
+    {
+        $current = $request->user()->currentAccessToken();
+        $extra = [];
+
+        if ($current->can(Tokens::PENDING) && ! $current->can('*')) {
+            $plain = Tokens::app($request->user());
+            $current->delete();
+            $tokenId = explode('|', $plain, 2)[0];
+            $extra['token'] = $plain;
+        } else {
+            $tokenId = $current->getKey();
+        }
+
+        $minutes = $current->can(Tokens::EXTENSION) && ! $current->can('*')
+            ? self::EXTENSION_UNLOCK_MINUTES
+            : self::CONFIRMATION_MINUTES;
+
+        Cache::put('app-password-verified:' . $tokenId, true, now()->addMinutes($minutes));
+
+        return $extra + ['expires_in' => $minutes * 60];
     }
 
     public static function verifiedKey(Request $request): string
@@ -195,7 +227,14 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        return response()->json($request->user());
+        $token = $request->user()->currentAccessToken();
+
+        return response()->json($request->user()->toArray() + [
+            'session' => [
+                'locked'       => $token->can(Tokens::PENDING) && ! $token->can('*'),
+                'idle_minutes' => Tokens::IDLE_MINUTES,
+            ],
+        ]);
     }
 
     public function logout(Request $request)

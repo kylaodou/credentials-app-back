@@ -42,6 +42,23 @@ L'interface web associée se trouve dans le dépôt [`credentials-app`](https://
 | POST | `/api/auth/verify-password` | Vérifie le mot de passe applicatif |
 | GET, POST, PUT, DELETE | `/api/credentials` | Gestion des identifiants |
 | GET | `/api/credentials/{id}/reveal` | Affiche un identifiant en clair |
+| POST | `/api/extension/code` | Code à usage unique pour connecter l'extension |
+| POST | `/api/extension/connect` | L'extension échange le code contre son jeton |
+| GET | `/api/extension/matches?url=` | Identifiants enregistrés pour un site |
+
+## Sessions et sécurité
+
+| Jeton | Délivré | Accès | Durée |
+|---|---|---|---|
+| `pending` | après Google | profil, saisie du mot de passe applicatif | 10 minutes |
+| `app` | après le mot de passe applicatif | tout | **30 minutes sans activité**, 12 heures au plus |
+| `extension` | contre un code à usage unique | liste, recherche par site, ajout, affichage après déverrouillage (15 min) | 30 jours |
+
+- Les secrets (identifiant, mot de passe, jeton) sont chiffrés en base avec la clé de l'application.
+- Afficher un secret exige une confirmation récente du mot de passe applicatif.
+- Changer le mot de passe applicatif ferme toutes les sessions, extension comprise.
+- Limitation du nombre de requêtes sur chaque route sensible, réponses JSON même sans en-tête `Accept`.
+- En-têtes de sécurité (`nosniff`, `X-Frame-Options`, `Referrer-Policy`, HSTS) et aucune mise en cache des réponses de l'API.
 
 ## Prérequis
 
