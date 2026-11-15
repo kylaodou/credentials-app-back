@@ -19,11 +19,11 @@ class CredentialController extends Controller
         $data = $request->validate([
             'name'          => 'required|string|max:255',
             'type'          => 'required|in:password,token',
-            'username'      => 'nullable|string',
-            'password'      => 'nullable|string',
-            'token'         => 'nullable|string',
-            'url'           => 'nullable|url',
-            'description'   => 'nullable|string',
+            'username'      => 'nullable|string|max:255',
+            'password'      => 'nullable|string|max:1000',
+            'token'         => 'nullable|string|max:10000',
+            'url'           => 'nullable|url:http,https|max:2048',
+            'description'   => 'nullable|string|max:2000',
             'validity_date' => 'nullable|date',
         ]);
 
@@ -61,11 +61,11 @@ class CredentialController extends Controller
         $data = $request->validate([
             'name'          => 'sometimes|string|max:255',
             'type'          => 'sometimes|in:password,token',
-            'username'      => 'nullable|string',
-            'password'      => 'nullable|string',
-            'token'         => 'nullable|string',
-            'url'           => 'nullable|url',
-            'description'   => 'nullable|string',
+            'username'      => 'nullable|string|max:255',
+            'password'      => 'nullable|string|max:1000',
+            'token'         => 'nullable|string|max:10000',
+            'url'           => 'nullable|url:http,https|max:2048',
+            'description'   => 'nullable|string|max:2000',
             'validity_date' => 'nullable|date',
         ]);
 
